@@ -140,7 +140,14 @@
   }
   .lote-card.excepcion{border-color:var(--amber);background:var(--amber-bg);}
   .lote-card.listo{border-color:var(--green);}
-  .lote-head{display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:10px;}
+  .lote-head{display:flex;justify-content:space-between;align-items:center;gap:10px;margin-bottom:10px;}
+  .estacion-badge{
+    width:38px;height:38px;border-radius:8px;background:var(--navy);color:#fff;
+    display:flex;align-items:center;justify-content:center;font-weight:800;font-size:18px;
+    flex-shrink:0;
+  }
+  .lote-card.listo .estacion-badge{background:var(--green);}
+  .lote-head > div:nth-child(2){flex:1;}
   .lote-head .wo{font-size:15px;font-weight:700;color:var(--navy);}
   .lote-head .sku{font-size:12px;color:var(--gray);}
   .lote-count{font-size:22px;font-weight:800;color:var(--navy);}
@@ -148,10 +155,13 @@
   .bar-bg{height:8px;border-radius:6px;background:#EEF1F4;overflow:hidden;margin:8px 0 10px;}
   .bar-fill{height:100%;background:var(--blue);border-radius:6px;transition:width .25s;}
   .lote-card.listo .bar-fill{background:var(--green);}
-  .posiciones{display:flex;flex-wrap:wrap;gap:4px;margin-bottom:10px;}
+  .posiciones.grid4x4{
+    display:grid;grid-template-columns:repeat(4,1fr);gap:6px;margin-bottom:10px;
+    max-width:180px;
+  }
   .pos{
-    width:20px;height:20px;border-radius:4px;background:#EEF1F4;
-    font-size:9px;display:flex;align-items:center;justify-content:center;
+    width:100%;aspect-ratio:1/1;border-radius:5px;background:#EEF1F4;
+    font-size:12px;display:flex;align-items:center;justify-content:center;
     color:var(--gray);font-weight:700;
   }
   .pos.on{background:var(--blue);color:#fff;}
@@ -231,13 +241,15 @@
   body.modo-display main{ max-width:none; padding:24px 30px; }
   body.modo-display .section-title h2{ font-size:26px; }
   body.modo-display .count-pill{ font-size:18px; padding:5px 16px; }
-  body.modo-display .grid{ grid-template-columns:repeat(auto-fill,minmax(340px,1fr)); gap:20px; }
-  body.modo-display .lote-card{ padding:22px; }
-  body.modo-display .lote-head .wo{ font-size:22px; }
-  body.modo-display .lote-head .sku{ font-size:15px; }
-  body.modo-display .lote-count{ font-size:34px; }
-  body.modo-display .pos{ width:30px; height:30px; font-size:12px; }
-  body.modo-display .badge-ready{ font-size:13px; padding:6px 14px; }
+  body.modo-display .grid{ grid-template-columns:repeat(auto-fill,minmax(360px,1fr)); gap:24px; }
+  body.modo-display .lote-card{ padding:26px; }
+  body.modo-display .estacion-badge{ width:64px; height:64px; font-size:32px; border-radius:12px; }
+  body.modo-display .lote-head .wo{ font-size:24px; }
+  body.modo-display .lote-head .sku{ font-size:16px; }
+  body.modo-display .lote-count{ font-size:38px; }
+  body.modo-display .posiciones.grid4x4{ max-width:260px; gap:9px; }
+  body.modo-display .pos{ font-size:16px; border-radius:8px; }
+  body.modo-display .badge-ready{ font-size:14px; padding:7px 16px; }
   body.modo-display .empty-state{ font-size:18px; padding:60px; }
 
 </style>
@@ -384,8 +396,10 @@
   <div class="modal" style="max-width:420px;">
     <button class="close" id="closeCamara">✕</button>
     <h3>Escaneo por cámara (respaldo)</h3>
-    <p style="font-size:12px;color:var(--gray);">Usa esto solo si el lector de escritorio no está disponible.</p>
+    <p style="font-size:12px;color:var(--gray);">Usa esto solo si el lector de escritorio no está disponible. La cámara solo detecta el código — no se cuenta nada hasta que confirmes.</p>
     <div id="readerCam" style="width:100%;"></div>
+    <div id="camDetectado" style="margin-top:12px;padding:10px;border-radius:8px;background:var(--gray-light);font-family:monospace;font-size:13px;min-height:20px;color:var(--gray);">Apunta la cámara al código de barras…</div>
+    <button class="btn-primary" id="btnUsarCodigoCam" style="width:100%;margin-top:10px;" disabled>Usar este código</button>
   </div>
 </div>
 
@@ -549,10 +563,21 @@
     }
   }
 
+  function asignarEstacion(){
+    const enUso = new Set(Object.values(lotes).filter(l=>l.estado!=="liberado").map(l=>l.estacion));
+    let letra = "A";
+    for(let i=0;i<26;i++){
+      letra = String.fromCharCode(65+i);
+      if(!enUso.has(letra)) return letra;
+    }
+    return "?";
+  }
+
   function crearLoteConSKU(wo, sku){
     const key = loteKey(wo);
     lotes[key] = {
       wo, sku,
+      estacion: asignarEstacion(),
       rollos: [],
       excepciones: [],
       estado: "en_proceso",
@@ -563,7 +588,7 @@
       liberadoTs: null
     };
     saveLotes();
-    logEvento("apertura_lote", wo, sku, "Lote abierto");
+    logEvento("apertura_lote", wo, sku, "Lote abierto — Estación " + lotes[key].estacion);
     render();
     // El escaneo que originó la apertura cuenta como el primer rollo
     procesarScan(wo);
@@ -735,6 +760,7 @@
         ${listo?'<div class="badge-ready">LISTO</div>':''}
         ${tieneExc?'<div class="badge-exc">EXCEPCIÓN</div>':''}
         <div class="lote-head">
+          <div class="estacion-badge">${lote.estacion||"?"}</div>
           <div>
             <div class="wo">${lote.wo}</div>
             <div class="sku">${lote.sku}</div>
@@ -742,7 +768,7 @@
           <div class="lote-count">${n}<small>/${MAX_ROLLOS}</small></div>
         </div>
         <div class="bar-bg"><div class="bar-fill" style="width:${pct}%;"></div></div>
-        <div class="posiciones">${posiciones}</div>
+        <div class="posiciones grid4x4">${posiciones}</div>
         ${excList}
         <div class="lote-meta">Actualizado ${new Date(lote.actualizadoTs).toLocaleTimeString("es-MX")}</div>
         <div class="card-actions">
@@ -889,23 +915,51 @@
   };
 
 
-  // ---- Cámara (fallback) ----
+  // ---- Cámara (fallback, modo manual) ----
+  // La cámara solo DETECTA el código en pantalla y lo muestra — nunca lo procesa
+  // sola, para evitar que el escaneo continuo (varios frames por segundo) genere
+  // lecturas repetidas falsas. El operador confirma con el botón antes de contar.
   let html5Qr = null;
+  let codigoDetectadoCam = null;
   const modalCamara = document.getElementById("modalCamara");
+  const camDetectado = document.getElementById("camDetectado");
+  const btnUsarCodigoCam = document.getElementById("btnUsarCodigoCam");
+
   document.getElementById("btnCamara").onclick = async ()=>{
     modalCamara.classList.add("open");
+    codigoDetectadoCam = null;
+    btnUsarCodigoCam.disabled = true;
+    camDetectado.textContent = "Apunta la cámara al código de barras…";
     try{
       html5Qr = new Html5Qrcode("readerCam");
       await html5Qr.start(
         { facingMode: "environment" },
         { fps: 10, qrbox: 220 },
-        (decodedText)=>{ procesarScan(decodedText); },
+        (decodedText)=>{
+          // Solo actualiza lo detectado en pantalla; NO cuenta nada automáticamente.
+          if(codigoDetectadoCam !== decodedText){
+            codigoDetectadoCam = decodedText;
+            camDetectado.textContent = "Detectado: " + decodedText;
+            camDetectado.style.color = "var(--navy)";
+            btnUsarCodigoCam.disabled = false;
+          }
+        },
         ()=>{}
       );
     }catch(e){
       toast("No se pudo iniciar la cámara: " + e, "err");
     }
   };
+
+  btnUsarCodigoCam.onclick = ()=>{
+    if(!codigoDetectadoCam) return;
+    procesarScan(codigoDetectadoCam);
+    camDetectado.textContent = "Código usado: " + codigoDetectadoCam + " — apunta al siguiente rollo";
+    camDetectado.style.color = "var(--green)";
+    btnUsarCodigoCam.disabled = true;
+    codigoDetectadoCam = null;
+  };
+
   async function cerrarCamara(){
     if(html5Qr){
       try{ await html5Qr.stop(); await html5Qr.clear(); }catch(e){}
