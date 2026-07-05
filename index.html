@@ -331,19 +331,12 @@
     <h2>Modo demo — simular escaneos</h2>
   </div>
   <div class="demo-panel">
-    <h3>Generar escaneo de prueba (sin lector físico)</h3>
-    <p style="font-size:12px;color:var(--gray);margin-top:-6px;">Simula lo que dispararía el lector al leer el código de barras del rollo (solo trae el WO — igual en los 16 rollos de la orden).</p>
-    <div class="demo-row">
-      <select id="demoWO">
-        <option value="860001286-82">860001286-82 (T-Tape 508-08-670)</option>
-        <option value="OT-60310">OT-60310</option>
-        <option value="OT-71190">OT-71190</option>
-      </select>
-      <button class="btn-primary" id="btnSimularScan">Simular escaneo</button>
-    </div>
-    <div class="demo-row">
-      <button class="btn-outline" id="btnSimularLoteCompleto">▶ Simular lote completo (16 limpio)</button>
-      <button class="btn-outline" id="btnSimularDuplicado">▶ Simular doble lectura</button>
+    <h3>WO ficticias — un clic = un escaneo (para demo en vivo)</h3>
+    <p style="font-size:12px;color:var(--gray);margin-top:-6px;">Cada botón simula el escaneo de una WO distinta. Da clic varias veces seguidas en el mismo botón para llenar ese lote, o ve saltando entre botones para mostrar varias estaciones abriéndose en paralelo — exactamente igual a como se vería con el lector real.</p>
+    <div class="demo-row" id="demoBotonesWO"></div>
+    <div class="demo-row" style="margin-top:10px;">
+      <button class="btn-outline" id="btnSimularLoteCompleto">▶ Llenar la 1ª WO ficticia completa (16 limpio)</button>
+      <button class="btn-outline" id="btnSimularDuplicado">▶ Simular doble lectura en la 1ª WO ficticia</button>
       <button class="btn-ghost" id="btnLimpiarTodo">🗑 Reiniciar demo</button>
     </div>
   </div>
@@ -965,18 +958,43 @@
   document.getElementById("closeAuditoria").onclick = ()=> modalAuditoria.classList.remove("open");
 
   // ---- Demo helpers ----
-  const DEMO_SKUS = { "860001286-82":"508-08-670", "OT-60310":"SKU-B117", "OT-71190":"SKU-C044" };
+  // WO ficticias para demo en vivo: un clic = un escaneo real (pasa por el mismo
+  // procesarScan/crearLoteConSKU que usaría el lector físico), pero sin pedir el
+  // SKU por modal — se usa el SKU de prueba precargado, para que la demo fluya rápido.
+  const DEMO_WOS = [
+    { wo:"860001286-82", sku:"508-08-670", label:"WO 1 · T-Tape 508-08-670" },
+    { wo:"OT-60310",     sku:"SKU-B117",   label:"WO 2 · SKU-B117" },
+    { wo:"OT-71190",     sku:"SKU-C044",   label:"WO 3 · SKU-C044" },
+    { wo:"OT-84520",     sku:"SKU-D902",   label:"WO 4 · SKU-D902" },
+    { wo:"OT-90112",     sku:"SKU-E215",   label:"WO 5 · SKU-E215" },
+    { wo:"OT-13387",     sku:"SKU-F730",   label:"WO 6 · SKU-F730" },
+  ];
+  const DEMO_SKUS = Object.fromEntries(DEMO_WOS.map(d=>[d.wo, d.sku]));
 
-  document.getElementById("btnSimularScan").onclick = ()=>{
-    const wo = document.getElementById("demoWO").value;
-    procesarScan(wo);
-  };
-
-  document.getElementById("btnSimularLoteCompleto").onclick = ()=>{
-    const wo = document.getElementById("demoWO").value;
+  function simularScanFicticio(wo){
     const key = loteKey(wo);
     if(!lotes[key]){
-      crearLoteConSKU(wo, DEMO_SKUS[wo] || "SKU-DEMO"); // abre lote y cuenta rollo 1
+      crearLoteConSKU(wo, DEMO_SKUS[wo] || "SKU-DEMO"); // abre la estación y cuenta el primer rollo
+    } else {
+      procesarScan(wo); // mismo camino que usaría el lector real, incluye debounce
+    }
+  }
+
+  const demoBotonesWO = document.getElementById("demoBotonesWO");
+  DEMO_WOS.forEach(d=>{
+    const btn = document.createElement("button");
+    btn.className = "btn-primary";
+    btn.textContent = d.label;
+    btn.style.fontSize = "12px";
+    btn.onclick = ()=> simularScanFicticio(d.wo);
+    demoBotonesWO.appendChild(btn);
+  });
+
+  document.getElementById("btnSimularLoteCompleto").onclick = ()=>{
+    const wo = DEMO_WOS[0].wo;
+    const key = loteKey(wo);
+    if(!lotes[key]){
+      crearLoteConSKU(wo, DEMO_SKUS[wo]); // abre lote y cuenta rollo 1
     }
     const esperaMs = (config.debounceSeg*1000) + 150;
     let i = (lotes[key]?.rollos.length) || 1;
@@ -988,18 +1006,18 @@
   };
 
   document.getElementById("btnSimularDuplicado").onclick = ()=>{
-    const wo = document.getElementById("demoWO").value;
+    const wo = DEMO_WOS[0].wo;
     const key = loteKey(wo);
     if(!lotes[key]){
-      crearLoteConSKU(wo, DEMO_SKUS[wo] || "SKU-DEMO");
+      crearLoteConSKU(wo, DEMO_SKUS[wo]);
     }
     setTimeout(()=> procesarScan(wo), 200); // dentro de la ventana de debounce a propósito
   };
 
   document.getElementById("btnLimpiarTodo").onclick = ()=>{
-    if(!confirm("¿Reiniciar todos los lotes y la bitácora de esta demo?")) return;
-    lotes = {}; auditoria = [];
-    saveLotes(); saveAudit(); render();
+    if(!confirm("¿Reiniciar todos los lotes, estaciones y la bitácora de esta demo?")) return;
+    lotes = {}; auditoria = []; estacionesSlots = [];
+    saveLotes(); saveAudit(); saveEstaciones(); render();
     toast("Demo reiniciada", "ok");
   };
 
