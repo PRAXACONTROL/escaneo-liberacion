@@ -500,8 +500,17 @@
   // Por eso el conteo se basa en "cada escaneo válido = un rollo más", con
   // protección de tiempo mínimo (debounce) contra doble lectura accidental
   // del mismo rollo por el operador.
+
+  // Algunos lectores anteponen el "AIM Symbology Identifier" (ej. ]C1 para Code128)
+  // antes del dato real. Con teclados no-US a veces el corchete se ve como comilla,
+  // acento, etc. Esto lo detecta y lo quita automáticamente.
+  function quitarPrefijoAIM(txt){
+    const m = txt.match(/^[\]'`´‘’][A-Za-z][0-9](.*)$/s);
+    return m ? m[1].trim() : txt;
+  }
+
   function procesarScan(raw){
-    const wo = (raw||"").trim();
+    const wo = quitarPrefijoAIM((raw||"").trim());
     if(!wo){
       toast("Lectura vacía o ilegible", "err");
       beepErr();
