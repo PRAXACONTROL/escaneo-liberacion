@@ -16,6 +16,8 @@
     --border:#DCE3EA;
     --green:#1E8E5A;
     --green-bg:#E7F6EE;
+    --green-idle:#DFF6E6;
+    --green-strong:#7CDDA0;
     --red:#C62828;
     --red-bg:#FDECEC;
     --amber:#B8860B;
@@ -119,27 +121,36 @@
     gap:14px;
   }
   .lote-card{
-    background:#fff;border:1px solid var(--border);border-radius:var(--radius);
+    background:var(--green-idle);border:1px solid var(--border);border-radius:var(--radius);
     padding:16px;position:relative;overflow:hidden;
-    transition:box-shadow .2s, border-color .2s;
+    transition:background-color 1.4s ease, box-shadow .2s, border-color .2s;
+  }
+  .lote-card.recien-escaneado{
+    background:var(--green-strong);
+    transition:background-color .15s ease;
   }
   .lote-card.flash-error{
     animation:flashError .5s ease-in-out 2;
     border-color:var(--red);
   }
   @keyframes flashError{
-    0%,100%{background:#fff;}
+    0%,100%{background:var(--green-idle);}
     50%{background:var(--red-bg);}
-  }
-  .lote-card.flash-ok{
-    animation:flashOk .5s ease-in-out 2;
-  }
-  @keyframes flashOk{
-    0%,100%{background:#fff;}
-    50%{background:var(--green-bg);}
   }
   .lote-card.excepcion{border-color:var(--amber);background:var(--amber-bg);}
   .lote-card.listo{border-color:var(--green);}
+  .lote-card.vacio{
+    background:#fff;border-style:dashed;opacity:.65;
+    display:flex;align-items:center;gap:14px;padding:16px;
+  }
+  .estacion-badge.vacio{background:#CBD3DA;color:#5B6670;}
+  .vacio-label{font-size:13px;color:var(--gray);line-height:1.4;}
+  .vacio-label span{font-size:11px;}
+  .exc-row{
+    display:flex;align-items:center;gap:12px;background:#fff;border:1px solid var(--amber);
+    border-radius:8px;padding:10px 12px;margin-bottom:8px;
+  }
+  .exc-row-info{flex:1;font-size:13px;color:#1F2933;}
   .lote-head{display:flex;justify-content:space-between;align-items:center;gap:10px;margin-bottom:10px;}
   .estacion-badge{
     width:38px;height:38px;border-radius:8px;background:var(--navy);color:#fff;
@@ -155,9 +166,11 @@
   .bar-bg{height:8px;border-radius:6px;background:#EEF1F4;overflow:hidden;margin:8px 0 10px;}
   .bar-fill{height:100%;background:var(--blue);border-radius:6px;transition:width .25s;}
   .lote-card.listo .bar-fill{background:var(--green);}
-  .posiciones.grid4x4{
-    display:grid;grid-template-columns:repeat(4,1fr);gap:6px;margin-bottom:10px;
-    max-width:180px;
+  .lote-body{display:flex;gap:14px;align-items:stretch;}
+  .lote-info{flex:1;min-width:0;display:flex;flex-direction:column;}
+  .posiciones.grid2x8{
+    display:grid;grid-template-columns:repeat(2,1fr);gap:5px;
+    max-width:90px;flex-shrink:0;
   }
   .pos{
     width:100%;aspect-ratio:1/1;border-radius:5px;background:#EEF1F4;
@@ -234,7 +247,7 @@
   /* ---- Modo Vista de Acomodo (2da pantalla, solo lectura) ---- */
   body.modo-display .topbar, body.modo-display footer, body.modo-display .demo-panel,
   body.modo-display #tituloModoDemo, body.modo-display #tituloExcepciones,
-  body.modo-display #gridExcepciones, body.modo-display #emptyExcepciones,
+  body.modo-display #listaExcepciones, body.modo-display #emptyExcepciones,
   body.modo-display #btnVistaAcomodo, body.modo-display .card-actions{ display:none !important; }
   body.modo-display header{ padding:20px 30px; }
   body.modo-display header .app-title{ font-size:22px; }
@@ -247,10 +260,13 @@
   body.modo-display .lote-head .wo{ font-size:24px; }
   body.modo-display .lote-head .sku{ font-size:16px; }
   body.modo-display .lote-count{ font-size:38px; }
-  body.modo-display .posiciones.grid4x4{ max-width:260px; gap:9px; }
+  body.modo-display .posiciones.grid2x8{ max-width:140px; gap:8px; }
   body.modo-display .pos{ font-size:16px; border-radius:8px; }
   body.modo-display .badge-ready{ font-size:14px; padding:7px 16px; }
   body.modo-display .empty-state{ font-size:18px; padding:60px; }
+  body.modo-display .estacion-badge.vacio{ width:64px; height:64px; font-size:32px; }
+  body.modo-display .vacio-label{ font-size:18px; }
+  body.modo-display .vacio-label span{ font-size:14px; }
 
 </style>
 </head>
@@ -273,6 +289,9 @@
     <label for="scanInput">Escanear rollo:</label>
     <input id="scanInput" type="text" autocomplete="off" placeholder="Apunte el lector aquí y escanee la etiqueta...">
   </div>
+</div>
+<div style="padding:4px 20px;background:#fff;border-bottom:1px solid var(--border);font-size:11px;color:var(--gray);font-family:monospace;" id="debugLectura">Última lectura cruda: —</div>
+<div class="topbar">
   <div class="operador-box">
     Operador (iniciales):
     <input id="operadorInput" type="text" placeholder="Ej. M.A." maxlength="6" style="width:80px;text-transform:uppercase;">
@@ -294,17 +313,18 @@
 <main>
 
   <div class="section-title">
-    <h2>Lotes activos</h2>
+    <h2>Estaciones de acomodo</h2>
     <span class="count-pill" id="pillActivos">0</span>
   </div>
+  <p style="font-size:12px;color:var(--gray);margin-top:-8px;">Cada cuadro es un lugar físico fijo — no cambia de posición aunque se abran, liberen o lleguen nuevas WO.</p>
   <div id="gridActivos" class="grid"></div>
-  <div id="emptyActivos" class="empty-state">Sin lotes en proceso. Escanea el primer rollo para comenzar.</div>
+  <div id="emptyActivos" class="empty-state">Sin estaciones abiertas todavía. Escanea el primer rollo para comenzar.</div>
 
   <div class="section-title" id="tituloExcepciones">
     <h2>Excepciones — QA (Manuel Pereda)</h2>
     <span class="count-pill" id="pillExcepciones" style="background:var(--amber);">0</span>
   </div>
-  <div id="gridExcepciones" class="grid"></div>
+  <div id="listaExcepciones"></div>
   <div id="emptyExcepciones" class="empty-state">Sin excepciones pendientes.</div>
 
   <div class="section-title" id="tituloModoDemo">
@@ -429,13 +449,16 @@
   const LS_CFG   = "liberacion-config-v1";
   const LS_OP    = "liberacion-operador-v1";
   const LS_TURNO = "liberacion-turno-v1";
+  const LS_ESTAC = "liberacion-estaciones-v1";
   const MAX_ROLLOS = 16;
+  const HIGHLIGHT_MS = 9000; // duración del verde fuerte tras un escaneo (8-10s)
 
   let lotes = {};       // key = wo -> lote
   let auditoria = [];   // array de eventos
   let config = { debounceSeg: 2 };
   let operador = "";
   let turno = "A";
+  let estacionesSlots = []; // ["A","B","C",...] — orden fijo, solo crece, nunca se reordena
   let loteEnConfirmacion = null;
   let woEnEsperaDeSKU = null;
 
@@ -443,6 +466,7 @@
     try{ lotes = JSON.parse(localStorage.getItem(LS_LOTES)) || {}; }catch(e){ lotes = {}; }
     try{ auditoria = JSON.parse(localStorage.getItem(LS_AUDIT)) || []; }catch(e){ auditoria = []; }
     try{ const c = JSON.parse(localStorage.getItem(LS_CFG)); if(c) config = c; }catch(e){}
+    try{ estacionesSlots = JSON.parse(localStorage.getItem(LS_ESTAC)) || []; }catch(e){ estacionesSlots = []; }
     operador = localStorage.getItem(LS_OP) || "";
     turno = localStorage.getItem(LS_TURNO) || "A";
   }
@@ -451,6 +475,7 @@
   function saveConfig(){ localStorage.setItem(LS_CFG, JSON.stringify(config)); }
   function saveOperador(){ localStorage.setItem(LS_OP, operador); }
   function saveTurno(){ localStorage.setItem(LS_TURNO, turno); }
+  function saveEstaciones(){ localStorage.setItem(LS_ESTAC, JSON.stringify(estacionesSlots)); }
 
   function loteKey(wo){ return wo; }
 
@@ -502,15 +527,19 @@
   // del mismo rollo por el operador.
 
   // Algunos lectores anteponen el "AIM Symbology Identifier" (ej. ]C1 para Code128)
-  // antes del dato real. Con teclados no-US a veces el corchete se ve como comilla,
-  // acento, etc. Esto lo detecta y lo quita automáticamente.
+  // antes del dato real. Con teclados no-US ese símbolo puede llegar como
+  // comilla, acento u otro carácter — se acepta cualquier símbolo no alfanumérico
+  // en esa posición, seguido de una letra y un dígito (formato fijo del AIM ID).
   function quitarPrefijoAIM(txt){
-    const m = txt.match(/^[\]'`´‘’][A-Za-z][0-9](.*)$/s);
+    const m = txt.match(/^[^A-Za-z0-9]{1}[A-Za-z][0-9](.*)$/s);
     return m ? m[1].trim() : txt;
   }
 
   function procesarScan(raw){
-    const wo = quitarPrefijoAIM((raw||"").trim());
+    const crudo = (raw||"");
+    const wo = quitarPrefijoAIM(crudo.trim());
+    const dbg = document.getElementById("debugLectura");
+    if(dbg) dbg.textContent = `Última lectura cruda: "${crudo}" → interpretado como WO: "${wo}"`;
     if(!wo){
       toast("Lectura vacía o ilegible", "err");
       beepErr();
@@ -544,7 +573,7 @@
       logEvento("lectura_repetida", wo, lote.sku, `${desdeUltimo.toFixed(1)}s desde el escaneo anterior`);
       saveLotes();
       render();
-      flashCard(key, "error");
+      flashCard(key);
       toast(`Posible doble lectura en WO ${wo} (${desdeUltimo.toFixed(1)}s) — no se cuenta`, "err");
       beepErr();
       return;
@@ -562,7 +591,10 @@
     logEvento("scan", wo, lote.sku, `Posición ${lote.rollos.length}`);
     saveLotes();
     render();
-    flashCard(key, "ok");
+    // El resaltado en verde fuerte se calcula desde ultimoScanTs en cada render();
+    // este timeout solo fuerza un re-render puntual para que se apague a tiempo
+    // (~9s) sin depender únicamente del sondeo periódico.
+    setTimeout(render, HIGHLIGHT_MS + 200);
 
     if(lote.rollos.length === MAX_ROLLOS && lote.excepciones.filter(e=>!e.resuelto).length === 0){
       toast(`WO ${wo} completa (16/16) — lista para liberar`, "ok");
@@ -572,14 +604,21 @@
     }
   }
 
+  // Las estaciones son posiciones físicas FIJAS: una vez creada una, nunca se
+  // quita ni se reordena — cuando su lote se libera, queda "vacía" y espera a
+  // que llegue una WO nueva para reocuparla. Esto evita que los cuadros de la
+  // vista de acomodo cambien de lugar (los lotes son demasiado pesados para mover).
   function asignarEstacion(){
-    const enUso = new Set(Object.values(lotes).filter(l=>l.estado!=="liberado").map(l=>l.estacion));
-    let letra = "A";
-    for(let i=0;i<26;i++){
-      letra = String.fromCharCode(65+i);
-      if(!enUso.has(letra)) return letra;
+    // 1) Reutilizar la primera estación existente que esté libre
+    for(const letra of estacionesSlots){
+      const ocupada = Object.values(lotes).some(l => l.estado !== "liberado" && l.estacion === letra);
+      if(!ocupada) return letra;
     }
-    return "?";
+    // 2) No hay ninguna libre: crear una estación nueva (se agrega al final, nunca en medio)
+    const letra = String.fromCharCode(65 + estacionesSlots.length);
+    estacionesSlots.push(letra);
+    saveEstaciones();
+    return letra;
   }
 
   function crearLoteConSKU(wo, sku){
@@ -604,12 +643,12 @@
   }
 
 
-  function flashCard(key, kind){
+  function flashCard(key){
     setTimeout(()=>{
       const el = Array.from(document.querySelectorAll('[data-key]')).find(e => e.getAttribute('data-key') === key);
       if(el){
-        el.classList.add(kind==="ok" ? "flash-ok" : "flash-error");
-        setTimeout(()=>el.classList.remove(kind==="ok"?"flash-ok":"flash-error"), 1100);
+        el.classList.add("flash-error");
+        setTimeout(()=>el.classList.remove("flash-error"), 1100);
       }
     }, 30);
   }
@@ -721,21 +760,32 @@
 
   // ---- Render ----
   function render(){
-    const activos = Object.entries(lotes).filter(([k,l]) => l.estado !== "liberado" && !tieneExcepcionAbierta(l));
+    // Registrar estaciones de cualquier lote activo que por algún motivo no
+    // esté todavía en la lista fija (protección extra, no debería pasar).
+    Object.values(lotes).forEach(l=>{
+      if(l.estado !== "liberado" && l.estacion && !estacionesSlots.includes(l.estacion)){
+        estacionesSlots.push(l.estacion);
+      }
+    });
+    saveEstaciones();
+
+    const ocupadas = estacionesSlots.filter(letra =>
+      Object.values(lotes).some(l => l.estado !== "liberado" && l.estacion === letra)
+    );
+    document.getElementById("pillActivos").textContent = `${ocupadas.length}/${estacionesSlots.length}`;
+    document.getElementById("emptyActivos").style.display = estacionesSlots.length ? "none" : "block";
+
+    document.getElementById("gridActivos").innerHTML = estacionesSlots.map(letra=>{
+      const entry = Object.entries(lotes).find(([k,l]) => l.estado !== "liberado" && l.estacion === letra);
+      return entry ? cardHTML(entry[0], entry[1]) : emptySlotHTML(letra);
+    }).join("");
+
     const excepciones = Object.entries(lotes).filter(([k,l]) => tieneExcepcionAbierta(l));
-
-    document.getElementById("pillActivos").textContent = activos.length;
     document.getElementById("pillExcepciones").textContent = excepciones.length;
-    document.getElementById("emptyActivos").style.display = activos.length ? "none" : "block";
     document.getElementById("emptyExcepciones").style.display = excepciones.length ? "none" : "block";
-
-    document.getElementById("gridActivos").innerHTML = activos
-      .sort((a,b)=>b[1].actualizadoTs - a[1].actualizadoTs)
-      .map(([k,l]) => cardHTML(k,l)).join("");
-
-    document.getElementById("gridExcepciones").innerHTML = excepciones
-      .sort((a,b)=>b[1].actualizadoTs - a[1].actualizadoTs)
-      .map(([k,l]) => cardHTML(k,l)).join("");
+    document.getElementById("listaExcepciones").innerHTML = excepciones
+      .sort((a,b)=>a[1].estacion.localeCompare(b[1].estacion))
+      .map(([k,l]) => excepcionRowHTML(k,l)).join("");
 
     // Bind actions
     document.querySelectorAll("[data-liberar]").forEach(btn=>{
@@ -748,11 +798,37 @@
     renderAuditoria();
   }
 
+  function emptySlotHTML(letra){
+    return `
+      <div class="lote-card vacio">
+        <div class="estacion-badge vacio">${letra}</div>
+        <div class="vacio-label">Vacío<br><span>Esperando WO</span></div>
+      </div>
+    `;
+  }
+
+  function excepcionRowHTML(key, lote){
+    return lote.excepciones.filter(e=>!e.resuelto).map((e)=>{
+      const idx = lote.excepciones.indexOf(e);
+      const label = e.tipo === "lectura_repetida" ? "Posible doble lectura" : e.tipo;
+      return `
+        <div class="exc-row">
+          <div class="estacion-badge" style="background:var(--amber);">${lote.estacion}</div>
+          <div class="exc-row-info">
+            <b>${lote.wo}</b> · ${lote.sku} — ${label}
+          </div>
+          <button class="btn-outline" data-resolver data-key="${key}" data-idx="${idx}">Resolver</button>
+        </div>
+      `;
+    }).join("");
+  }
+
   function cardHTML(key, lote){
     const n = lote.rollos.length;
     const pct = Math.round((n/MAX_ROLLOS)*100);
     const listo = n >= MAX_ROLLOS && !tieneExcepcionAbierta(lote);
     const tieneExc = tieneExcepcionAbierta(lote);
+    const recienEscaneado = (Date.now() - (lote.ultimoScanTs||0)) < HIGHLIGHT_MS;
     let posiciones = "";
     for(let i=1;i<=MAX_ROLLOS;i++){
       const filled = i <= n;
@@ -765,23 +841,27 @@
     }).join("");
 
     return `
-      <div class="lote-card ${listo?'listo':''} ${tieneExc?'excepcion':''}" data-key="${key}">
+      <div class="lote-card ${listo?'listo':''} ${tieneExc?'excepcion':''} ${recienEscaneado?'recien-escaneado':''}" data-key="${key}">
         ${listo?'<div class="badge-ready">LISTO</div>':''}
         ${tieneExc?'<div class="badge-exc">EXCEPCIÓN</div>':''}
-        <div class="lote-head">
-          <div class="estacion-badge">${lote.estacion||"?"}</div>
-          <div>
-            <div class="wo">${lote.wo}</div>
-            <div class="sku">${lote.sku}</div>
+        <div class="lote-body">
+          <div class="posiciones grid2x8">${posiciones}</div>
+          <div class="lote-info">
+            <div class="lote-head">
+              <div class="estacion-badge">${lote.estacion||"?"}</div>
+              <div>
+                <div class="wo">${lote.wo}</div>
+                <div class="sku">${lote.sku}</div>
+              </div>
+              <div class="lote-count">${n}<small>/${MAX_ROLLOS}</small></div>
+            </div>
+            <div class="bar-bg"><div class="bar-fill" style="width:${pct}%;"></div></div>
+            ${excList}
+            <div class="lote-meta">Actualizado ${new Date(lote.actualizadoTs).toLocaleTimeString("es-MX")}</div>
+            <div class="card-actions">
+              <button class="btn-primary" data-liberar="${key}" ${listo?"":"disabled style='opacity:.4;cursor:not-allowed;'"}>Confirmar liberación</button>
+            </div>
           </div>
-          <div class="lote-count">${n}<small>/${MAX_ROLLOS}</small></div>
-        </div>
-        <div class="bar-bg"><div class="bar-fill" style="width:${pct}%;"></div></div>
-        <div class="posiciones grid4x4">${posiciones}</div>
-        ${excList}
-        <div class="lote-meta">Actualizado ${new Date(lote.actualizadoTs).toLocaleTimeString("es-MX")}</div>
-        <div class="card-actions">
-          <button class="btn-primary" data-liberar="${key}" ${listo?"":"disabled style='opacity:.4;cursor:not-allowed;'"}>Confirmar liberación</button>
         </div>
       </div>
     `;
