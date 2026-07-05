@@ -240,9 +240,11 @@
   @media print{
     body *{visibility:hidden;}
     #print-area, #print-area *{visibility:visible;}
-    #print-area{position:absolute;top:0;left:0;width:100%;padding:20px;}
+    #print-area{display:block !important;position:absolute;top:0;left:0;width:100%;padding:20px;}
   }
-  #print-area{display:none;}
+  @media screen{
+    #print-area{display:none;}
+  }
 
   /* ---- Modo Vista de Acomodo (2da pantalla, solo lectura) ---- */
   body.modo-display .topbar, body.modo-display footer, body.modo-display .demo-panel,
